@@ -1,0 +1,18 @@
+%YAML:1.0
+---
+model_type: MEI
+camera_name: encrypted
+image_width: 1352
+image_height: 1080
+mirror_parameters:
+   xi: 1.5829971426195792e+00
+distortion_parameters:
+   k1: -8.3207525431138374e-01
+   k2: 1.1921305159404980e+00
+   p1: 1.8399102169993130e-03
+   p2: -1.4407175513047750e-03
+projection_parameters:
+   gamma1: 1.7444069888389108e+03
+   gamma2: 1.7427364315727659e+03
+   u0: 6.9368891997141498e+02
+   v0: 5.4826559573857799e+02
