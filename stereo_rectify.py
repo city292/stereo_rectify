@@ -54,7 +54,7 @@ def opencv_save_img_pathlib(savepath, img):
     cv2.imwrite(savepath.as_posix(), img)
     
 if __name__=="__main__":
-    datadir = Path('/data/endo_data/3D_endo/stereo_231222')
+    datadir = Path('/data/endo_data/3D_endo/0416-采图/bmp/data/mei_out')
     # print(_create_object_point((8,11),0.0052))
 
     # datadir = Path('/data/endo_data/3D_endo/0315-采图-1352-1080/rgb')

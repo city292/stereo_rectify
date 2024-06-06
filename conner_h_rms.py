@@ -6,14 +6,15 @@ import cv2
 from tqdm import tqdm
 
 
-def get_coners(datadir):
-    right_imgpoints, left_imgpoints, object_points = [], [], []
+def get_coners(left_datadir, right_datadir):
+    right_imgpoints, left_imgpoints, object_points, names = [], [], [], []
     n = 0
-    for left_path in sorted(list(datadir.glob('left/*.png'))+list(datadir.glob('left/*.jpg'))):
+    for left_path in sorted(list(left_datadir.glob('*.png'))):
         
         id = left_path.stem
+        names.append(id)
 
-        right_path = datadir /f'right/{left_path.name}'
+        right_path = right_datadir /f'{left_path.name}'
         if not right_path.exists():
             continue
 
@@ -44,16 +45,16 @@ def get_coners(datadir):
         left_imgpoints.append(left_corner)
         right_imgpoints.append(right_corner)
         
-        left_chess = cv2.drawChessboardCorners((right_rgb*255).astype(np.uint8), (8,11), right_corner,left_ret)
-        out_path= datadir/'chess'/'right'/ f'{id}.png'
+        left_chess = cv2.drawChessboardCorners((left_rgb*255).astype(np.uint8), (8,11), left_corner,left_ret)
+        out_path= left_datadir/'chess'/ f'{id}.png'
         out_path.parent.mkdir(parents=True,exist_ok=True)
         cv2.imwrite(out_path.as_posix(), left_chess)
-        right_chess = cv2.drawChessboardCorners((left_rgb*255).astype(np.uint8), (8,11), left_corner,right_ret)
-        out_path= datadir/'chess'/'left'/ f'{id}.png'
+        right_chess = cv2.drawChessboardCorners((right_rgb*255).astype(np.uint8), (8,11), right_corner,right_ret)
+        out_path= right_datadir/'chess'/ f'{id}.png'
         out_path.parent.mkdir(parents=True,exist_ok=True)
         cv2.imwrite(out_path.as_posix(), right_chess)
         
-    return left_imgpoints, right_imgpoints, n
+    return left_imgpoints, right_imgpoints, n, names
     
 if __name__=="__main__":
 
@@ -70,21 +71,22 @@ if __name__=="__main__":
     
 
 
-    # left_imgpoints, right_imgpoints, n_undis_1 = get_coners(Path('/data/endo_data/3D_endo/0327-采图/rgb/undis_camodolcal_1'))
+    # left_imgpoints, right_imgpoints, n_undis_1 = get_coners(Path('/data/endo_data/3D_endo/0326-采图/rgb/undis_camodolcal_1'))
     # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
     # coner_rm_1 = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
     # coner_rm_1_x = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
     # mae_unidis_1 = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
     
 
-    # left_imgpoints, right_imgpoints, n_undis_3 = get_coners(Path('/data/endo_data/3D_endo/stereo_231222/undis_3'))
+    # left_imgpoints, right_imgpoints, n_undis_3 = get_coners(Path('/data/endo_data/3D_endo/0326-采图/rgb/undis_camodolcal_3'))
 
     # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
     # coner_rm_3 = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
     # coner_rm_3_x = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
     # mae_unidis_3 = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
+    
+    
     # left_imgpoints, right_imgpoints, n_pinhole = get_coners(Path('/data/endo_data/3D_endo/stereo_231222/pinhole/rec'))
-   
     # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
     # pinhole_rmse = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
     # pinhole_x = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
@@ -98,22 +100,37 @@ if __name__=="__main__":
     # mae_omidir = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
 
 
-    left_imgpoints, right_imgpoints, n_camodolcal_3 = get_coners(Path('/data/endo_data/3D_endo/0326-采图/rgb/undis_camodolcal_3'))
+    left_imgpoints, right_imgpoints, n_camodolcal_3_no_subpix = get_coners(Path('/data/endo_data/3D_endo/0417-采图-15度/undis_camodolcal_2'))
    
     print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
-    camodolcal_3_rmse = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
+    camodolcal_3_rmse_no_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
+    camodolcal_3_x_no_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
+    mae_camodolcal_3_no_subpix = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
 
-    camodolcal_3_x = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
 
-    mae_camodolcal_3 = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
+
+    # left_imgpoints, right_imgpoints, n_camodolcal_3_improve = get_coners(Path('/data/endo_data/3D_endo/0326-采图/rgb/undis_camodolcal_3_improve'))
+    # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
+    # camodolcal_3_rmse_improve = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
+    # camodolcal_3_x_improve = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
+    # mae_camodolcal_3_improve = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
+
+
+    # left_imgpoints, right_imgpoints, n_camodolcal_3_subpix = get_coners(Path('/data/endo_data/3D_endo/0326-采图/rgb/undis_camodolcal_3_subpix'))
+    # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
+    # camodolcal_3_rmse_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
+    # camodolcal_3_x_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
+    # mae_camodolcal_3_subpix = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
 
 
     # print(f'pinhole n={n_pinhole} RMSE : {pinhole_rmse:.4f} MAE: {mae_pinhole:.4f}')
     # print(f'fisheye n={nfish} RMSE : {coner_rm_fisheye:.4f} MAE: {mae_fisheye:.4f}')
     # print(f'undis 1 n={n_undis_1} RMSE : {coner_rm_1:.4f} MAE: {mae_unidis_1:.4f}')
-    # print(f'undis 3 n={n_undis_3} RMSE : {coner_rm_3:.4f} MAE: {mae_unidis_3:.4f}')
+    print(f'undis 3 no_subpix n={n_camodolcal_3_no_subpix} RMSE : {camodolcal_3_rmse_no_subpix:.4f} MAE: {mae_camodolcal_3_no_subpix:.4f}')
+    # print(f'undis 3 subpix n={n_camodolcal_3_subpix} RMSE : {camodolcal_3_rmse_subpix:.4f} MAE: {mae_camodolcal_3_subpix:.4f}')
+    # print(f'undis 3 improve n={n_camodolcal_3_improve} RMSE : {camodolcal_3_rmse_improve:.4f} MAE: {mae_camodolcal_3_improve:.4f}')
     # print(f'omidir  n={n_omidir} RMSE : {omidir_rmse:.4f} MAE: {mae_omidir:.4f}')
-    print(f'camodolcal_3  n={n_camodolcal_3} RMSE : {camodolcal_3_rmse:.4f} MAE: {mae_camodolcal_3:.4f}')
+    # print(f'camodolcal_3  n={n_camodolcal_3} RMSE : {camodolcal_3_rmse:.4f} MAE: {mae_camodolcal_3:.4f}')
     
     
     
