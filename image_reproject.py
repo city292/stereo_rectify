@@ -11,10 +11,8 @@ from pathlib import Path
 import time
 import shutil
 
-import tkinter as tk  
 import quaternion
 
-from PIL import Image,ImageTk
 ARC_TO_DEG =57.29577951308238
 
 def read_intrinsics(intrinsics_yaml):
