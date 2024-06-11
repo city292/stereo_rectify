@@ -138,8 +138,8 @@ def main():
     parser = argparse.ArgumentParser()
     # parser.add_argument('--params_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/mei_out')
     # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0510-采图-0度/')
-    # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0417-采图-15度/')
-    parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/')
+    parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0417-采图-15度/')
+    # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/')
     parser.add_argument('--rect_flag', type=str, default='longlati', choices=['perspective', 'longlati'])
     args = parser.parse_args()
     data_path = args.data_path
