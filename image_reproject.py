@@ -128,6 +128,69 @@ def read_extrinsics(extrinsics_yaml):
 #     R2 = R1 @ R21
 
 #     return R1, R2
+# 初始化矫正映射的函数
+def initUndistortRectifyMap(K, D, xi, R, P, size):
+    width, height = size
+    map1 = np.zeros((height,width), dtype=np.float32)
+    map2 = np.zeros((height,width), dtype=np.float32)
+
+    f, c, s = None, None, None
+    
+    camMat = K
+    f = np.array([camMat[0, 0], camMat[1, 1]], dtype=np.float32)
+    c = np.array([camMat[0, 2], camMat[1, 2]], dtype=np.float32)
+    s = float(camMat[0, 1])
+
+
+    kp = D.flatten().astype(np.float32)
+    _xi = float(xi) 
+    k = np.array([kp[0], kp[1]], dtype=np.float64)
+    p = np.array([kp[2], kp[3]], dtype=np.float64)
+    RR = R
+    PP = P
+
+    iK = np.linalg.inv(PP)
+    iR = np.linalg.inv(RR)
+
+    for i in range(height):
+
+        theta = 0.0* iK[0,0]+iK[0,2]
+        h = i * iK[1, 1] + iK[1, 2]
+
+        for j in range(width):
+            
+            _xt, _yt, _wt = 0.0, 0.0, 0.0
+
+
+            _xt = np.sin(theta) * np.cos(h)
+            _yt = np.cos(theta) * np.sin(h)
+            _wt = np.cos(theta) * np.cos(h)
+
+            _x = iR[0, 0] * _xt + iR[0, 1] * _yt + iR[0, 2] * _wt
+            _y = iR[1, 0] * _xt + iR[1, 1] * _yt + iR[1, 2] * _wt
+            _w = iR[2, 0] * _xt + iR[2, 1] * _yt + iR[2, 2] * _wt
+
+            r = np.sqrt(_x * _x + _y * _y + _w * _w)
+            Xs = _x / r
+            Ys = _y / r
+            Zs = _w / r
+
+            xu = Xs / (Zs + _xi)
+            yu = Ys / (Zs + _xi)
+
+            r2 = xu * xu + yu * yu
+            r4 = r2 * r2
+            xd = (1 + k[0] * r2 + k[1] * r4) * xu + 2 * p[0] * xu * yu + p[1] * (r2 + 2 * xu * xu)
+            yd = (1 + k[0] * r2 + k[1] * r4) * yu + p[0] * (r2 + 2 * yu * yu) + 2 * p[1] * xu * yu
+
+            u = f[0] * xd + s * yd + c[0]
+            v = f[1] * yd + c[1]
+
+            map1[i,j] = u.astype(np.float32)
+            map2[i,j] = v.astype(np.float32)
+            theta+=iK[0,0]
+
+    return map1, map2
 
 def stereo_rectify(R,T):
     ARC_TO_DEG =57.29577951308238
@@ -138,6 +201,8 @@ def stereo_rectify(R,T):
     R_right = R.T @ R_left
 
     t = R_left @ T
+    print('t: \n', t)
+    print(f'{np.arctan(t[2]/t[0])*ARC_TO_DEG:.2f} {np.arctan(t[1]/t[0])*ARC_TO_DEG:.2f} ')
 
     e1 = t/ np.linalg.norm(t)
     e2 = np.array([-t[1], t[0], 0.0])
@@ -175,28 +240,28 @@ def objectpoint2_lrpoint(objectPoints_ori,R_object2left, R, T):
 def find_left_view_point(R_object2left,depth, base_T, h, R,T,K_left,xi_left,D_left,K_right,xi_right,D_right):
     l_max = -depth/ np.tan(20/180*np.pi)*1.5
     r_vec = cv2.Rodrigues(R.T)[0]
-    while l_max < 0:
+    while l_max < depth/ np.tan(20/180*np.pi)*1.5:
         opoint = np.array([l_max+base_T[0]/2, h, depth]).reshape((3,1))
         op_l, op_r = objectpoint2_lrpoint(opoint, R_object2left, R, T)
 
         imgp_left_l, _ = cv2.omnidir.projectPoints(op_l.reshape((1,1,3)),np.zeros(3),np.zeros(3),K_left,xi_left[0,0],D_left)
-        imgp_right_l, _ = cv2.omnidir.projectPoints(op_r.reshape((1,1,3)),r_vec,-T,K_right,xi_right[0,0],D_right)
+        imgp_right_l, _ = cv2.omnidir.projectPoints(op_r.reshape((1,1,3)),np.zeros(3),np.zeros(3),K_right,xi_right[0,0],D_right)
         imgp_left_l = np.round(imgp_left_l).astype('int32').reshape(-1)
         imgp_right_l = np.round(imgp_right_l).astype('int32').reshape(-1)
-        if imgp_left_l[0]>0 and imgp_right_l[0]>0:
+        if imgp_left_l[0]>=50 and imgp_right_l[0]>=50:
             break
         l_max += 0.1
     
     r_max = depth/ np.tan(20/180*np.pi)*1.5
-    while r_max > 0:
+    while r_max > -depth/ np.tan(20/180*np.pi)*1.5:
         opoint = np.array([r_max+base_T[0]/2, h, depth]).reshape((3,1))
         op_l, op_r = objectpoint2_lrpoint(opoint, R_object2left, R, T)
 
         imgp_left_r, _ = cv2.omnidir.projectPoints(op_l.reshape((1,1,3)),np.zeros(3),np.zeros(3),K_left,xi_left[0,0],D_left)
-        imgp_right_r, _ = cv2.omnidir.projectPoints(op_r.reshape((1,1,3)),r_vec,-T,K_right,xi_right[0,0],D_right)
+        imgp_right_r, _ = cv2.omnidir.projectPoints(op_r.reshape((1,1,3)),np.zeros(3),np.zeros(3),K_right,xi_right[0,0],D_right)
         imgp_left_r = np.round(imgp_left_r).astype('int32').reshape(-1)
         imgp_right_r = np.round(imgp_right_r).astype('int32').reshape(-1)
-        if imgp_left_r[0]<1500 and imgp_right_r[0]<1500:
+        if imgp_left_r[0]<1450 and imgp_right_r[0]<1450:
             break
         r_max -= 0.1
 
@@ -210,9 +275,9 @@ def main():
 
     # data_path = '/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/'
     cv2.namedWindow("WindowName", cv2.WINDOW_FULLSCREEN)
-    new_width = 2160
-    new_height = 980
-    cv2.resizeWindow("WindowName", new_width+400, new_height*2)
+    new_width = 1600
+    new_height = 800
+    cv2.resizeWindow("WindowName", new_width+400 + 800, new_height*2)
     # cv2.moveWindow("WindowName", (3840-new_width+400)//2, 0,new_width+400, new_height*2)
     intri_left_yaml = (Path(data_path) / 'mei_out'/ 'camera_left.yaml').as_posix()
     intri_right_yaml = (Path(data_path) / 'mei_out'/  'camera_right.yaml').as_posix()
@@ -230,6 +295,7 @@ def main():
     print('D_right: \n', D_right)
     print('xi_right: ', xi_right[0,0])
     rect_flag=cv2.omnidir.RECTIFY_LONGLATI
+    rect_flag=cv2.omnidir.RECTIFY_PERSPECTIVE
     n = 0 
     base_depth = 10
     grid_h, grid_w = 51,51
@@ -239,8 +305,10 @@ def main():
     objectColor = cv2.GaussianBlur(objectColor,(5,5),0)
     objectColor = cv2.GaussianBlur(objectColor,(5,5),0)
     base_deg = 0
+    background = 0
     base_T = np.array([2.5,0,0])
     virtual_depth = 20
+    ratio = 2.6
     dem = np.zeros((grid_h,grid_w))
     dem[np.random.randint(0,grid_h),np.random.randint(0,grid_w)] = 5
     dem[np.random.randint(0,grid_h),np.random.randint(0,grid_w)] = -5
@@ -250,12 +318,15 @@ def main():
     dem[np.random.randint(0,grid_h),np.random.randint(0,grid_w)] = -5
     dem[np.random.randint(0,grid_h),np.random.randint(0,grid_w)] = 5
     dem[np.random.randint(0,grid_h),np.random.randint(0,grid_w)] = -5
-    dem = cv2.GaussianBlur(dem*2,(5,5),0)
+    dem = cv2.GaussianBlur(dem*4,(9,9),0)
+    i=0
     while True:
-        degs = np.array([0,base_deg/ARC_TO_DEG*2,0])
+
+        
+        degs = np.array([0,-base_deg/ARC_TO_DEG*2,0])
         R = cv2.Rodrigues(degs)[0]
         
-        R_object2left = cv2.Rodrigues(np.array([0,base_deg/ARC_TO_DEG,0]))[0].T
+        R_object2left = cv2.Rodrigues(np.array([0,-base_deg/ARC_TO_DEG,0]))[0].T
 
 
         T = R_object2left @ base_T
@@ -311,7 +382,7 @@ def main():
         # img_left[:] = 255
         img_left[idxs[:,1],idxs[:,0],:]=objectColor_l
         img_left = morph_close(img_left)
-        # img_left[img_left==0]=255
+        img_left[img_left==0]=background
         # print((l_max[1][0,0,0],l_max[1][0,0,1]))
         cv2.circle(img_left, (l_max[1][0],l_max[1][1]), 10, (0,0,255),-1)
         cv2.circle(img_left, (r_max[1][0],r_max[1][1]), 10, (0,255,0),-1)
@@ -336,11 +407,12 @@ def main():
         # img_right[:] = 255
         img_right[idxs[:,1],idxs[:,0],:]=objectColor_r
         img_right = morph_close(img_right)
-        # img_right[img_right==0]=255
+        img_right[img_right==0]=background
         cv2.circle(img_right, (l_max[2][0],l_max[2][1]), 10, (0,0,255),-1)
         cv2.circle(img_right, (r_max[2][0],r_max[2][1]), 10, (0,255,0),-1)
+
         
-        ratio = 2.0
+        
         new_K = np.array([
             [new_width /ratio, 0, new_width/2],
             [0, new_height /ratio, new_height/2],
@@ -350,51 +422,78 @@ def main():
         
         left_map1,left_map2 =cv2.omnidir.initUndistortRectifyMap(K_left, D_left, xi_left, R_left, new_K, (new_width, new_height),  flags=rect_flag,m1type=cv2.CV_32FC1)
         right_map1,right_map2 =cv2.omnidir.initUndistortRectifyMap(K_right, D_right, xi_right, R_right, new_K, (new_width, new_height),  flags=rect_flag,m1type=cv2.CV_32FC1)
+        
+        
+
+        
         undis_left = cv2.remap(img_left,map1=left_map1,map2=left_map2,interpolation=cv2.INTER_CUBIC,borderMode=cv2.BORDER_CONSTANT)
         undis_right = cv2.remap(img_right,map1=right_map1,map2=right_map2,interpolation=cv2.INTER_CUBIC,borderMode=cv2.BORDER_CONSTANT)
             
         global_shift = int(np.linalg.norm(T) * new_K[0,0] / virtual_depth)
         if global_shift >=400:
             global_shift = 400
-        print(global_shift)
+        # print(global_shift)
 
-        lbl = np.zeros((new_height*2, new_width+400,3),np.uint8)
+        lbl = np.zeros((new_height*2, new_width+400 + 800,3),np.uint8)
         lbl[::2,200-global_shift//2:200-global_shift//2+new_width,:] = undis_left
         lbl[1::2,200+global_shift//2:200+global_shift//2+new_width,:] = undis_right
-
-
-        cv2.putText(lbl, f'base_depth {base_depth} depth: {objectPoints_ori[...,2].min():.1f}-{objectPoints_ori[...,2].max():.1f}', (150,100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
-        cv2.putText(lbl, f'grid {s:.2f}', (150,150), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
-        cv2.putText(lbl, f'deg  {base_deg*2:.2f}', (150,200), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
         
-        cv2.putText(lbl, f'range  {l_max[0]:.2f} - {r_max[0]:.2f}', (150,250), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
-        cv2.putText(lbl, f'virtual_depth  {virtual_depth}', (150,300), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
-        cv2.putText(lbl, f'global_shift  {global_shift}', (150,350), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        lbl[:800,new_width+400:new_width+400+800,:] = cv2.resize(img_left, (800,800),fx=0,fy=0)
+        lbl[800:1600,new_width+400:new_width+400+800,:] = cv2.resize(img_right, (800,800),fx=0,fy=0)
+        lbl[:,new_width+400,:] = 255
+        cv2.putText(lbl, 'left', (400+new_width+400,50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, 'right', (400+new_width+400,950), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+
+        cv2.putText(lbl, f'base_depth {base_depth} depth: {objectPoints_ori[...,2].min():.1f}-{objectPoints_ori[...,2].max():.1f}', (10,100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'grid {s:.2f}', (10,150), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'deg  {-base_deg*2:.2f}', (10,200), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
         
-        cv2.circle(lbl,(new_width//2, new_height),1,(255,255,255),1)
+        cv2.putText(lbl, f'range  {l_max[0]:.2f} - {r_max[0]:.2f}mm', (10,250), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'l-range  {(r_max[1][0]-l_max[1][0])/(r_max[0]-l_max[0]):.1f}pix/mm {r_max[1][0]-l_max[1][0]}={l_max[1][0]} - {r_max[1][0]}', (10,300), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'r-range  {(r_max[2][0]-l_max[2][0])/(r_max[0]-l_max[0]):.1f}pix/mm {r_max[2][0]-l_max[2][0]}={l_max[2][0]} - {r_max[2][0]}', (10,350), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        
+        # print(l_max, r_max)
+        cv2.putText(lbl, f'w/s virtual_depth  {virtual_depth}', (10,400), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'global_shift  {global_shift}', (10,450), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, f'l/b ratio  {ratio:.1f}', (10,500), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        cv2.putText(lbl, 'b: background', (10,550), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 4, cv2.LINE_AA)
+        
+        # cv2.circle(lbl,(lbl.shape[1]//2, lbl.shape[0]//2),1,(255,255,255),1)
+        # cv2.drawMarker(lbl,(lbl.shape[1]//2, lbl.shape[0]//2),(0,255,255),cv2.MARKER_CROSS,10,2)
         
         cv2.imwrite('output/img_left.png',img_left)
         cv2.imwrite('output/img_right.png',img_right)
         cv2.imwrite('output/undis_left.png',undis_left)
         cv2.imwrite('output/undis_right.png',undis_right)
         cv2.imwrite('output/lbl.png',lbl)
-        
         cv2.imshow("WindowName",lbl)
+        cv2.resizeWindow("WindowName", new_width+400 + 800+1, new_height*2)
+        # cv2.imshow('left', img_left)
+        # cv2.imshow('right', img_right)
+        i+=1
 
-        key = cv2.waitKey(50)
-        print(key)
+
+
+        key = cv2.waitKey(500)
+        # print(key)
         if key == 0: # up  
             base_depth += 1
         if key == 1: # down 
             base_depth -= 1
         if key == 2: # left
-            base_deg -= 0.5
-        if key == 3:
             base_deg += 0.5
+        if key == 3:
+            base_deg -= 0.5
         if key & 0xFF == ord('q'):
             return
-        if key & 0xFF == ord('q'):
-            return
+        if key & 0xFF == ord('o'):
+            ratio += 0.1
+            # return
+        if key & 0xFF == ord('l'):
+            ratio -= 0.1
+        if key & 0xFF == ord('b'):
+            background = (background+128)%256
+            # return
         if key & 0xFF == ord('w'):
             virtual_depth += 1
         if key & 0xFF == ord('s'):

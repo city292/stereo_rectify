@@ -105,7 +105,30 @@ def stereoRectify(R, T):
     R2 = R1 @ R21
 
     return R1, R2
+def stereo_rectify(R,T):
+    ARC_TO_DEG =57.29577951308238
 
+    degs = cv2.Rodrigues(R)[0]
+    degs_left = degs / 2
+    R_left = cv2.Rodrigues(degs_left)[0]
+    R_right = R.T @ R_left
+
+    t = R_left @ T
+    print('t: \n', t)
+    print(f'{np.arctan(t[2]/t[0])*ARC_TO_DEG:.2f} {np.arctan(t[1]/t[0])*ARC_TO_DEG:.2f} ')
+
+    e1 = t/ np.linalg.norm(t)
+    e2 = np.array([-t[1], t[0], 0.0])
+    e2 = e2 / np.linalg.norm(e2)
+    
+    e3 = np.cross(e1,e2)
+    e3 = e3/ np.linalg.norm(e3)
+    Rw = np.array([e1,e2,e3])
+    
+    R_left =Rw@ R_left
+    R_right = Rw @ R_right
+    
+    return R_left, R_right
 
 # 旋转矩阵转换为旋转向量的函数
 def rotation_matrix_to_vector(R):
@@ -137,10 +160,10 @@ def rodrigues(r):
 def main():
     parser = argparse.ArgumentParser()
     # parser.add_argument('--params_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/mei_out')
-    # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0510-采图-0度/')
-    parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0417-采图-15度/')
+    parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0510-采图-0度/')
+    # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0417-采图-15度/')
     # parser.add_argument('--data_path', type=str, default='/Users/citianyu/Desktop/project/stereo_rectify/data/0521-采图-30度/')
-    parser.add_argument('--rect_flag', type=str, default='longlati', choices=['perspective', 'longlati'])
+    parser.add_argument('--rect_flag', type=str, default='perspective', choices=['perspective', 'longlati'])
     args = parser.parse_args()
     data_path = args.data_path
     intri_left_yaml = (Path(data_path) / 'mei_out'/ 'camera_left.yaml').as_posix()
@@ -160,63 +183,27 @@ def main():
     print('xi_right: ', xi_right[0,0])
     print("R: \n", R)
     print("T: \n", T)
-        
+
     ARC_TO_DEG =57.29577951308238
     degs = cv2.Rodrigues(R)[0].reshape(-1)*ARC_TO_DEG
     print(f'旋转角度:       R: x: {degs[0]:.2f}, y: {degs[1]:.2f}, z:{degs[2]:.2f}')
-    T[0] = -T[0]
+
     theta_a = 'ori'
     theta_a = 'div2'
     if theta_a == 'ori':
         R_left, R_right = stereoRectify(R, T)
     else:
 
-        degs = rotation_matrix_to_vector(R)
-        degs_left = degs / 2
-        R_left = rodrigues(degs_left)
-        R_right = R_left @ R.T
-        print(R_left)
-        print(R_right.T)
-        T[-1]=-0.5
-        T[1]=0
-        # t = R_left.T @ T
-        print(T)
-        
-        # tr = np.array([0,-t[1],-t[2]])
-        # t2 = R_left.T @ R @ tr
-        # print(t2)
-        # exit()
-        
-        R_right = R_left @ R.T
-        t = R_right @ T
-        print(t)
-        # p
+        R_left, R_right = stereo_rectify(R,T)
+        # print(f'旋转角度:  Rw: x: {degs[0]:.2f}, y: {degs[1]:.2f}, z:{degs[2]:.2f}')
 
-        e1 = t/ np.linalg.norm(t)
-        e2 = np.array([-t[1], t[0], 0.0])
-        # print(e2)
-        e2 = e2 / np.linalg.norm(e2)
-        
-        e3 = np.cross(e1,e2)
-        e3 = e3/ np.linalg.norm(e3)
-        Rw = np.array([e1,e2,e3])
-        
-        R_left =Rw@ R_left
-        R_right = Rw @ R_right
-        degs = cv2.Rodrigues(Rw)[0].reshape(-1)*ARC_TO_DEG
-        print(f'旋转角度:  Rw: x: {degs[0]:.2f}, y: {degs[1]:.2f}, z:{degs[2]:.2f}')
-
-    degs = cv2.Rodrigues(R_left)[0].reshape(-1)*ARC_TO_DEG
-    
-    
-    
 
     degs = cv2.Rodrigues(R_left)[0].reshape(-1)*ARC_TO_DEG
 
     print(f'旋转角度:  R_left: x: {degs[0]:.2f}, y: {degs[1]:.2f}, z:{degs[2]:.2f}')
     degs = cv2.Rodrigues(R_right)[0].reshape(-1)*ARC_TO_DEG
     print(f'旋转角度: R_right: x: {degs[0]:.2f}, y: {degs[1]:.2f}, z:{degs[2]:.2f}')
-    exit()
+    # exit()
     fn_left_image = sorted(glob.glob(os.path.join(args.data_path, f'left/*{ext}')))
     fn_right_image = sorted(glob.glob(os.path.join(args.data_path, f'right/*{ext}')))
     # assert len(fn_left_image) == len(fn_right_image), "# ERROR: Left and right images must be equal"
@@ -241,10 +228,10 @@ def main():
     else: # args.rect_flag == 'longlati':
         rect_flag = cv2.omnidir.RECTIFY_LONGLATI
         
-    ratio = 2.5
+    ratio = 2.8
     new_K = np.array([
-        [new_width /ratio/(new_width/width), 0, new_width/2],
-        [0, new_height /ratio/(new_height/height), new_height/2],
+        [new_width /ratio, 0, new_width/2],
+        [0, new_height /ratio, new_height/2],
         [0, 0, 1]
         ])
     print(new_K)
@@ -295,12 +282,12 @@ def main():
     t1 = time.perf_counter()
 
     print(out_undis_right)
-    # left_imgpoints, right_imgpoints, n_conners, names = get_coners(Path(out_undis_left),Path(out_undis_right))
-    # print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
-    # rmse = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
-    # # camodolcal_3_x_no_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
-    # mae = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
-    # print(f'undis theta={theta_a} n={n_conners} RMSE : {rmse:.4f} MAE: {mae:.4f}')
+    left_imgpoints, right_imgpoints, n_conners, names = get_coners(Path(out_undis_left),Path(out_undis_right))
+    print(np.array(left_imgpoints).shape,np.array(right_imgpoints).shape)
+    rmse = np.sqrt(((np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1])**2).mean())
+    # camodolcal_3_x_no_subpix = np.sqrt(((np.array(left_imgpoints)[:,:,0,0]-np.array(right_imgpoints)[:,:,0,0])**2).mean())
+    mae = np.abs(np.array(left_imgpoints)[:,:,0,1]-np.array(right_imgpoints)[:,:,0,1]).mean()
+    print(f'undis theta={theta_a} n={n_conners} RMSE : {rmse:.4f} MAE: {mae:.4f}')
 
     # return
 
